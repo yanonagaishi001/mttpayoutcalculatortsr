@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Payout Sheet Generator</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,800;1,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+
+:root{
+  --white: #FFFFFF;
+  --paper: #FBFAFD;
+  --ink: #15121C;
+  --ink-soft: #55506A;
+  --ink-faint: #8B85A0;
+  --purple: #9B7FDE;
+  --purple-deep: #6E4FC4;
+  --purple-pale: #EFE9FB;
+  --purple-line: rgba(110,79,196,0.30);
+  --silver: #A79BC4;
+  --bronze: #B79ADB;
+  --red: #93303B;
+  --line: rgba(21,18,28,0.14);
+}
+
+*{ box-sizing: border-box; }
+
+body{
+  margin:0;
+  background: var(--white);
+  color: var(--ink);
+  font-family: 'Inter', sans-serif;
+  padding: 32px 20px 60px;
+  min-height: 100vh;
+}
+
+.wrap{ max-width: 980px; margin: 0 auto; }
+
+.eyebrow{
+  font-family:'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--purple-deep);
+  margin: 0 0 10px;
+  display:flex; align-items:center; gap:10px;
+}
+.eyebrow::before{
+  content:"";
+  width: 26px; height:1px;
+  background: var(--purple-deep);
+  display:inline-block;
+}
+
+h1{
+  font-family: 'Playfair Display', serif;
+  font-weight: 800;
+  font-size: clamp(28px, 4vw, 44px);
+  margin: 0 0 10px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.sub{
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  margin: 0 0 28px;
+  max-width: 560px;
+  line-height: 1.6;
+}
+
+.panel{
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  padding: 24px 26px;
+  margin-bottom: 20px;
+  position: relative;
+}
+.panel::before{
+  content:"";
+  position:absolute; inset:5px;
+  border: 1px solid var(--purple-line);
+  border-radius: 1px;
+  pointer-events:none;
+}
+
+.grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+label{
+  display:block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--purple-deep);
+  margin-bottom: 7px;
+  font-weight: 700;
+}
+
+.field-wrap{ position:relative; }
+.dollar{
+  position:absolute; left:12px; top:50%; transform:translateY(-50%);
+  color: var(--purple-deep); font-family:'IBM Plex Mono',monospace; font-size:14px; pointer-events:none;
+}
+
+input[type=number], select{
+  width:100%;
+  background: var(--white);
+  border: 1px solid rgba(21,18,28,0.28);
+  color: var(--ink);
+  font-family:'IBM Plex Mono', monospace;
+  font-size: 15px;
+  padding: 10px 12px 10px 26px;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+select{ padding-left:12px; cursor:pointer; }
+input[type=number]:focus, select:focus{ border-color: var(--purple-deep); }
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{ opacity: 0.6; }
+
+.slider-row{ grid-column: 1 / -1; }
+input[type=range]{
+  width:100%; accent-color: var(--purple-deep);
+  height: 4px;
+  margin-top: 8px;
+}
+.slider-labels{
+  display:flex; justify-content:space-between;
+  font-size: 10px; color: var(--ink-faint); text-transform:uppercase; letter-spacing:.06em;
+  margin-top: 4px;
+}
+
+.stats{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.stat{
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--purple);
+  border-radius: 2px;
+  padding: 16px 18px;
+}
+.stat .k{ font-size:10px; text-transform:uppercase; letter-spacing:.1em; color: var(--purple-deep); font-weight:700; }
+.stat .v{ font-family:'Playfair Display',serif; font-size: 26px; font-weight:700; margin-top:4px; color: var(--ink); }
+.stat .v.mono{ font-family:'IBM Plex Mono',monospace; }
+
+.warning{
+  background: #FBF0F1;
+  border: 1px solid rgba(147,48,59,0.4);
+  color: var(--red);
+  border-radius: 4px;
+  padding: 14px 18px;
+  font-size: 13.5px;
+  line-height:1.5;
+  margin-bottom: 20px;
+}
+.warning strong{ color: var(--red); }
+
+.skyline{
+  display:flex; align-items:flex-end; gap:3px;
+  height: 140px;
+  margin: 4px 0 6px;
+  padding: 0 2px;
+}
+.bar{
+  flex:1;
+  min-width: 3px;
+  border-radius: 2px 2px 0 0;
+  position: relative;
+  transition: height .3s ease;
+}
+.skyline-caption{
+  font-family:'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--ink-faint);
+  display:flex; justify-content:space-between;
+  padding: 0 2px;
+  margin-bottom: 22px;
+}
+
+table{
+  width:100%;
+  border-collapse: collapse;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+}
+thead th{
+  text-align:left;
+  font-family:'Inter',sans-serif;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--purple-deep);
+  font-weight:700;
+  padding: 0 14px 10px;
+  border-bottom: 1.5px solid var(--ink);
+}
+thead th:not(:first-child), tbody td:not(:first-child){ text-align:right; }
+
+tbody tr{ position:relative; }
+tbody td{
+  padding: 12px 14px;
+  border-bottom: 1px dashed var(--line);
+  color: var(--ink);
+}
+tbody tr:last-child td{ border-bottom:none; }
+tbody tr:hover{ background: var(--purple-pale); }
+
+.place-tag{
+  display:inline-flex; align-items:center; gap:8px;
+  font-weight:600;
+}
+.chip{
+  width:9px; height:9px; border-radius:50%;
+  display:inline-block; flex-shrink:0;
+}
+.payout-amt{ font-weight:700; font-size:15px; color: var(--ink); }
+.payout-edit{
+  width: 90px;
+  text-align: right;
+  border: 1px solid transparent;
+  background: transparent;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+  padding: 4px 6px;
+  border-radius: 4px;
+  outline: none;
+  transition: border-color .15s, background .15s;
+}
+.payout-edit:hover{ border-color: rgba(21,18,28,0.2); }
+.payout-edit:focus{ border-color: var(--purple-deep); }
+.payout-edit::-webkit-outer-spin-button, .payout-edit::-webkit-inner-spin-button{ opacity: 0.4; }
+.jump{ color: var(--purple-deep); font-size:12.5px; font-weight:600; }
+.jump.dash{ color: var(--ink-faint); opacity:.6; font-weight:400; }
+
+.actions{
+  display:flex; gap:12px; margin-top:18px; flex-wrap:wrap;
+}
+button{
+  font-family:'Inter',sans-serif;
+  font-weight:600;
+  font-size: 13px;
+  padding: 11px 20px;
+  border-radius: 4px;
+  border: 1.5px solid var(--ink);
+  background: var(--white);
+  color: var(--ink);
+  cursor:pointer;
+  transition: all .15s;
+}
+button:hover{ background: var(--purple-pale); border-color: var(--purple-deep); color: var(--purple-deep); }
+button.primary{
+  background: var(--ink);
+  color: var(--white);
+  border-color: var(--ink);
+}
+button.primary:hover{ background: var(--purple-deep); border-color: var(--purple-deep); color: var(--white); }
+
+.footnote{
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 16px;
+  line-height:1.6;
+}
+
+.print-only{ display: none; }
+
+@media print {
+  body{ padding: 0; background: white; }
+  .eyebrow, .sub, .panel:not(#skylinePanel), .stats, #warningBox, .actions, .footnote{ display: none !important; }
+  .skyline, .skyline-caption{ display: none !important; }
+  #skylinePanel{ border: none; padding: 0; }
+  #skylinePanel::before{ display: none; }
+  .print-only{ display: block; margin-bottom: 18px; }
+  .print-only h1{ font-size: 22px; margin-bottom: 4px; }
+  .print-only .print-meta{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+  }
+  table{ font-size: 12px; }
+  thead th{ border-bottom: 1.5px solid var(--ink); }
+  tbody tr:hover{ background: none; }
+  .payout-edit{ border: none !important; background: none !important; box-shadow: none !important; padding: 0; }
+  #reconciliation{ display: none; }
+}
+
+@media (max-width: 560px){
+  .panel{ padding: 18px; }
+  thead th:nth-child(3), tbody td:nth-child(3){ display:none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">State Championship &middot; Tournament Operations</div>
+  <h1>Payout Sheet Generator</h1>
+  <p class="sub">Enter the buy-in and how much of it feeds the prize pool. Pays 12% of the field, floors the min-cash at 2&times; buy-in, and keeps every pay jump bigger than the one before it.</p>
+
+  <div class="panel">
+    <div class="grid">
+      <div>
+        <label for="buyIn">Total buy-in</label>
+        <div class="field-wrap"><span class="dollar">$</span><input type="number" id="buyIn" value="0" min="0" step="1"></div>
+      </div>
+      <div>
+        <label for="toPool">Goes to prize pool</label>
+        <div class="field-wrap"><span class="dollar">$</span><input type="number" id="toPool" value="0" min="0" step="1"></div>
+      </div>
+      <div>
+        <label for="addedFunds">Added funds (overlay)</label>
+        <div class="field-wrap"><span class="dollar">$</span><input type="number" id="addedFunds" value="0" min="0" step="1"></div>
+      </div>
+      <div>
+        <label for="entries">Number of entries</label>
+        <input type="number" id="entries" value="0" min="1" step="1">
+      </div>
+      <div>
+        <label for="payPct">% of field paid</label>
+        <select id="payPct">
+          <option value="10">10%</option>
+          <option value="12" selected>12%</option>
+        </select>
+      </div>
+      <div>
+        <label for="inc">Round payouts to</label>
+        <select id="inc">
+          <option value="1">$1</option>
+          <option value="5">$5</option>
+          <option value="10">$10</option>
+          <option value="25" selected>$25</option>
+          <option value="50">$50</option>
+          <option value="75">$75</option>
+          <option value="100">$100</option>
+          <option value="200">$200</option>
+        </select>
+      </div>
+      <div>
+        <label for="minCashMult">Min cash (&times; buy-in)</label>
+        <input type="number" id="minCashMult" value="0" min="2" step="0.5">
+      </div>
+      <div>
+        <label for="minJumpSize">Minimum jump between bands</label>
+        <div class="field-wrap"><span class="dollar">$</span><input type="number" id="minJumpSize" value="0" min="1" step="1"></div>
+      </div>
+      <div>
+        <label for="maxBand">Max places per band</label>
+        <input type="number" id="maxBand" value="0" min="1" step="1">
+      </div>
+      <div class="slider-row">
+        <label for="curve">Payout curve shape</label>
+        <input type="range" id="curve" min="1.8" max="15.1" step="0.7" value="3.9">
+        <div class="slider-labels"><span>Flatter</span><span>Standard</span><span>Top-heavy</span></div>
+      </div>
+      <div>
+        <label for="firstPctTarget">1st place target (%, optional)</label>
+        <div class="field-wrap"><input type="number" id="firstPctTarget" placeholder="e.g. 25" min="0" max="90" step="0.1" style="padding-left:12px;"></div>
+        <div class="slider-labels" id="firstPctHint" style="margin-top:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">Prize Pool</div><div class="v mono" id="statPool">$0</div><div class="footnote" id="statPoolBreakdown" style="margin-top:6px;"></div></div>
+    <div class="stat"><div class="k" id="statPlacesLabel">Places Paid (12%)</div><div class="v mono" id="statPlaces">0</div></div>
+    <div class="stat"><div class="k" id="statMinLabel">Min Cash (2&times; buy-in)</div><div class="v mono" id="statMin">$0</div></div>
+    <div class="stat"><div class="k">1st Place</div><div class="v mono" id="statFirst">$0</div></div>
+  </div>
+
+  <div id="warningBox"></div>
+
+  <div class="print-only" id="printHeader">
+    <h1>Payout Sheet</h1>
+    <div class="print-meta" id="printMeta"></div>
+  </div>
+
+  <div class="panel" id="skylinePanel">
+    <div class="skyline" id="skyline"></div>
+    <div class="skyline-caption"><span>Last paid</span><span>1st place</span></div>
+
+    <table>
+      <thead>
+        <tr><th>Place</th><th>Payout</th><th>% of Pool</th><th>Jump</th></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+
+    <p class="footnote" id="reconciliation" style="margin-top:14px;"></p>
+    <p class="footnote" style="margin-top:2px;">Payout amounts are editable &mdash; click into any number to override it. % of Pool and Jump update live, and the line above flags if your edits no longer add up to the prize pool.</p>
+
+    <div class="actions">
+      <button class="primary" id="exportCsv">Export CSV</button>
+      <button id="printSheet">Print Sheet</button>
+    </div>
+    <p class="footnote">1st through 9th always get individual payouts (or all paid places, if fewer than 9 cash). Beyond 9th, places are grouped into tiers the way most rooms post them (e.g. "10th&ndash;12th"). Every jump &mdash; individual or tier-to-tier &mdash; is strictly larger than the jump below it, and the last paid place always pays exactly the min-cash multiplier &times; the buy-in (2&times; minimum, adjustable above) unless the pool can't support it, in which case you'll see a warning above. Raising the multiplier shifts money from the top places into the lower bands.</p>
+  </div>
+</div>
+
+<script>
+function buildTiers(N, maxBand) {
+  const tiers = [];
+  let remaining = N;
+  const individualCount = Math.min(9, N);
+  for (let i = 0; i < individualCount; i++) { tiers.push(1); remaining -= 1; }
+  let size = 3;
+  while (remaining > 0) {
+    const s = Math.min(size, remaining);
+    tiers.push(s);
+    remaining -= s;
+    size = Math.min(maxBand, Math.max(1, Math.ceil(size * 1.3)));
+  }
+  return tiers;
+}
+
+function generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand}) {
+  if (N <= 0) return {error: "No places to pay at this field size."};
+  const tiers = buildTiers(N, maxBand || 25);
+  const T = tiers.length;
+  if (T === 1) {
+    const pay = Math.round(prizePool / N / inc) * inc;
+    return {tiers, tierPayout: [pay], sum: pay * N, error: null};
+  }
+  const rawFloor = N * minCash;
+  if (prizePool - rawFloor < 0) {
+    return {error: `This prize pool can't cover the $${minCash.toLocaleString()} minimum cash for all ${N} paid places. Increase entries, raise the prize-pool contribution, or lower buy-in.`};
+  }
+
+  // The smallest allowed jump between any two bands - decoupled from the
+  // rounding increment, so fine rounding doesn't produce trivial $1 jumps.
+  const jumpUnit = Math.max(inc, Math.ceil((minJumpSize || inc) / inc) * inc);
+
+  // Phase 1: a guaranteed-valid skeleton where jumps grow by exactly one
+  // jump-unit each tier - this alone is enough to satisfy every rule.
+  const minJump = i => (T - 1 - i) * jumpUnit;
+  let minPayout = new Array(T);
+  minPayout[T - 1] = minCash;
+  for (let i = T - 2; i >= 0; i--) minPayout[i] = minPayout[i + 1] + minJump(i);
+  const minTotal = minPayout.reduce((a, v, i) => a + v * tiers[i], 0);
+  const requiredExtra = prizePool - minTotal;
+  if (requiredExtra < 0) {
+    return {error: `That many pay bands need at least $${minTotal.toLocaleString()} just to keep every jump at least $${jumpUnit}, but the pool is $${prizePool.toLocaleString()}. Try a finer rounding increment or a smaller minimum jump.`};
+  }
+
+  // Phase 2: layer the curve on top of the skeleton as a bonus - since the
+  // skeleton already guarantees strict separation, this is much less fragile
+  // to round than deriving payouts from the curve alone.
+  let weightSum = 0;
+  for (let i = 0; i < T; i++) weightSum += Math.pow(T - 1 - i, p) * tiers[i];
+  // small safety shrink so cumulative rounding is very likely to undershoot
+  // the pool rather than overshoot it (undershoot is always safe to fix)
+  const k = (weightSum === 0 ? 0 : requiredExtra / weightSum) * 0.99;
+  const raw = tiers.map((_, i) => minPayout[i] + k * Math.pow(T - 1 - i, p));
+
+  // round via cumulative jumps off raw (still monotonic, now with a real floor under it)
+  let tierPayout = new Array(T);
+  tierPayout[T - 1] = Math.max(Math.round(raw[T - 1] / inc) * inc, Math.ceil(minCash / inc) * inc);
+  let prevJump = null;
+  for (let i = T - 2; i >= 0; i--) {
+    const rawJump = raw[i] - raw[i + 1];
+    let roundedJump = Math.round(rawJump / inc) * inc;
+    if (roundedJump < jumpUnit) roundedJump = jumpUnit;
+    if (prevJump !== null && roundedJump <= prevJump) roundedJump = prevJump + jumpUnit;
+    tierPayout[i] = tierPayout[i + 1] + roundedJump;
+    prevJump = roundedJump;
+  }
+
+  let sum = tierPayout.reduce((a, v, i) => a + v * tiers[i], 0);
+  let diff = prizePool - sum;
+  if (diff >= 0) {
+    // always safe: growing 1st place only helps its jump over 2nd place
+    tierPayout[0] += diff;
+  } else {
+    // rounding overshot the pool - cascade a trim from the top down, each
+    // tier giving up only what it can while staying above the tier below it
+    let remaining = -diff;
+    for (let i = 0; i < T - 1 && remaining > 0; i++) {
+      const currentJump = tierPayout[i] - tierPayout[i + 1];
+      const safeTrim = Math.min(remaining, Math.max(0, currentJump - jumpUnit));
+      tierPayout[i] -= safeTrim;
+      remaining -= safeTrim;
+    }
+    if (remaining > 0) {
+      return {error: "This combination of field size, rounding, minimum jump, and curve setting can't produce a valid sheet. Try a finer rounding increment or a smaller minimum jump."};
+    }
+  }
+  sum = tierPayout.reduce((a, v, i) => a + v * tiers[i], 0);
+
+  let valid = true;
+  for (let i = 0; i < T - 1; i++) if (tierPayout[i] <= tierPayout[i + 1]) valid = false;
+  for (let i = 0; i < T - 2; i++) {
+    const j1 = tierPayout[i] - tierPayout[i + 1], j2 = tierPayout[i + 1] - tierPayout[i + 2];
+    if (j1 <= j2) valid = false;
+  }
+  if (tierPayout[T - 1] < minCash) valid = false;
+  if (!valid) {
+    return {error: "This combination of field size, rounding, and curve setting can't produce a valid sheet. Try a finer rounding increment."};
+  }
+
+  return {tiers, tierPayout, sum, error: null};
+}
+
+const $ = id => document.getElementById(id);
+const fmt = n => '$' + Math.round(n).toLocaleString();
+let isSyncingSlider = false;
+
+function chipColor(rank) {
+  if (rank === 1) return 'var(--purple-deep)';
+  if (rank === 2) return 'var(--purple)';
+  if (rank === 3) return 'var(--bronze)';
+  return 'var(--silver)';
+}
+
+function achievedFirstPct(p, prizePool, minCash, N, inc, minJumpSize, maxBand) {
+  const res = generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand});
+  if (res.error) return null;
+  return (res.tierPayout[0] / prizePool) * 100;
+}
+
+// Binary search for the curve setting (within the slider's own range) that
+// makes 1st place land closest to the requested percentage of the pool.
+function solveCurveForTarget(targetPct, prizePool, minCash, N, inc, lo, hi, minJumpSize, maxBand) {
+  for (let iter = 0; iter < 40; iter++) {
+    const mid = (lo + hi) / 2;
+    const val = achievedFirstPct(mid, prizePool, minCash, N, inc, minJumpSize, maxBand);
+    if (val === null || val < targetPct) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function render() {
+  const buyIn = parseFloat($('buyIn').value) || 0;
+  const toPool = parseFloat($('toPool').value) || 0;
+  const addedFunds = parseFloat($('addedFunds').value) || 0;
+  const entries = parseInt($('entries').value) || 0;
+  const inc = parseFloat($('inc').value);
+  const payPct = parseFloat($('payPct').value) / 100;
+
+  const prizePool = toPool * entries + addedFunds;
+  const N = Math.max(1, Math.round(entries * payPct));
+  const minCashMult = Math.max(2, parseFloat($('minCashMult').value) || 2);
+  const minCash = minCashMult * buyIn;
+  const minJumpSize = Math.max(1, parseFloat($('minJumpSize').value) || 25);
+  const maxBand = Math.max(1, parseInt($('maxBand').value) || 25);
+
+  const targetRaw = $('firstPctTarget').value;
+  const usingTarget = targetRaw !== '' && !isNaN(parseFloat(targetRaw));
+  let p;
+  if (usingTarget && buyIn && toPool && entries) {
+    const target = parseFloat(targetRaw);
+    const sliderMin = parseFloat($('curve').min);
+    const sliderMax = parseFloat($('curve').max);
+    p = solveCurveForTarget(target, prizePool, minCash, N, inc, sliderMin, sliderMax, minJumpSize, maxBand);
+    isSyncingSlider = true;
+    $('curve').value = p.toFixed(2);
+    isSyncingSlider = false;
+  } else {
+    p = parseFloat($('curve').value);
+  }
+
+  $('statPlacesLabel').textContent = `Places Paid (${$('payPct').value}%)`;
+
+  $('statPool').textContent = fmt(prizePool);
+  const breakdownEl = $('statPoolBreakdown');
+  if (addedFunds > 0) {
+    breakdownEl.textContent = `${fmt(toPool * entries)} from entries + ${fmt(addedFunds)} added`;
+  } else {
+    breakdownEl.textContent = '';
+  }
+  $('statPlaces').textContent = N + (entries ? ` of ${entries}` : '');
+  $('statMinLabel').textContent = `Min Cash (${minCashMult}\u00d7 buy-in)`;
+  $('statMin').textContent = fmt(minCash);
+
+  const warningBox = $('warningBox');
+  const skylinePanel = $('skylinePanel');
+
+  if (!buyIn || !toPool || !entries) {
+    warningBox.innerHTML = '';
+    skylinePanel.style.display = 'none';
+    $('statFirst').textContent = '$0';
+    $('firstPctHint').textContent = '';
+    return;
+  }
+
+  const res = generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand});
+
+  if (res.error) {
+    warningBox.innerHTML = `<div class="warning"><strong>Can't build a valid sheet:</strong> ${res.error}</div>`;
+    skylinePanel.style.display = 'none';
+    $('statFirst').textContent = '—';
+    $('firstPctHint').textContent = '';
+    return;
+  }
+
+  warningBox.innerHTML = '';
+  skylinePanel.style.display = 'block';
+  $('statFirst').textContent = fmt(res.tierPayout[0]);
+
+  $('printMeta').innerHTML = `
+    <span>Buy-in: ${fmt(buyIn)}</span>
+    <span>Entries: ${entries.toLocaleString()}</span>
+    <span>Prize Pool: ${fmt(prizePool)}</span>
+    <span>Places Paid: ${N} (${$('payPct').value}%)</span>
+    <span>Min Cash: ${fmt(minCash)}</span>
+  `;
+
+  const achievedPct = (res.tierPayout[0] / prizePool) * 100;
+  if (usingTarget) {
+    const target = parseFloat(targetRaw);
+    if (Math.abs(achievedPct - target) > 0.3) {
+      $('firstPctHint').innerHTML = `<span style="color:var(--red)">Closest achievable: ${achievedPct.toFixed(1)}%</span>`;
+    } else {
+      $('firstPctHint').innerHTML = `<span>Achieved: ${achievedPct.toFixed(1)}%</span>`;
+    }
+  } else {
+    $('firstPctHint').textContent = '';
+  }
+
+  // working copy that manual edits modify without needing a full recompute
+  window._workingPayout = res.tierPayout.slice();
+  window._workingTiers = res.tiers;
+  window._workingPool = prizePool;
+
+  // skyline bars
+  renderSkyline();
+
+  // table
+  const tbody = $('tableBody');
+  tbody.innerHTML = '';
+  let place = 1;
+  res.tiers.forEach((size, i) => {
+    const pay = res.tierPayout[i];
+    const label = size === 1 ? ordinal(place) : `${ordinal(place)}&ndash;${ordinal(place + size - 1)}`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="place-tag"><span class="chip" style="background:${chipColor(place)}"></span>${label}</span></td>
+      <td class="payout-amt"><input type="number" class="payout-edit" data-tier="${i}" value="${pay}" step="1"></td>
+      <td id="pctcell-${i}"></td>
+      <td id="jumpcell-${i}"></td>
+    `;
+    tbody.appendChild(tr);
+    place += size;
+  });
+
+  refreshDerivedCells();
+
+  tbody.querySelectorAll('.payout-edit').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.tier);
+      const val = parseFloat(e.target.value);
+      window._workingPayout[idx] = isNaN(val) ? 0 : val;
+      refreshDerivedCells();
+      renderSkyline();
+    });
+  });
+
+  window._lastResult = {res, prizePool, N, minCash, buyIn, toPool, addedFunds, entries};
+}
+
+function renderSkyline() {
+  const skyline = $('skyline');
+  skyline.innerHTML = '';
+  const payouts = window._workingPayout || [];
+  const maxPay = Math.max(...payouts, 1);
+  payouts.forEach((pay, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    const h = Math.max(4, (pay / maxPay) * 130);
+    bar.style.height = h + 'px';
+    bar.style.background = chipColor(i + 1);
+    bar.title = fmt(pay);
+    skyline.appendChild(bar);
+  });
+}
+
+// Recalculates % of pool, jump amounts, row warnings, and the total-distributed
+// reconciliation from the current (possibly hand-edited) payout values.
+function refreshDerivedCells() {
+  const payouts = window._workingPayout;
+  const tiers = window._workingTiers;
+  const prizePool = window._workingPool;
+  if (!payouts) return;
+
+  let totalDistributed = 0;
+  for (let i = 0; i < tiers.length; i++) totalDistributed += payouts[i] * tiers[i];
+
+  for (let i = 0; i < payouts.length; i++) {
+    const pctCell = document.getElementById(`pctcell-${i}`);
+    if (pctCell) pctCell.textContent = ((payouts[i] / prizePool) * 100).toFixed(2) + '%';
+
+    const jumpCell = document.getElementById(`jumpcell-${i}`);
+    if (jumpCell) {
+      if (i === payouts.length - 1) {
+        jumpCell.innerHTML = '<span class="jump dash">base</span>';
+      } else {
+        const jump = payouts[i] - payouts[i + 1];
+        const broken = jump <= 0 || (i < payouts.length - 2 && jump <= (payouts[i + 1] - payouts[i + 2]));
+        jumpCell.innerHTML = broken
+          ? `<span class="jump" style="color:var(--red)">${jump >= 0 ? '+' : ''}${fmt(jump)} &#9888;</span>`
+          : `<span class="jump">+${fmt(jump)}</span>`;
+      }
+    }
+  }
+
+  const diff = totalDistributed - prizePool;
+  $('statFirst').textContent = fmt(payouts[0]);
+  const reconEl = $('reconciliation');
+  if (reconEl) {
+    if (Math.abs(diff) < 1) {
+      reconEl.innerHTML = `<span>Total distributed: ${fmt(totalDistributed)} &mdash; matches prize pool</span>`;
+      reconEl.style.color = '';
+    } else {
+      const label = diff > 0 ? 'over' : 'under';
+      reconEl.innerHTML = `<span style="color:var(--red)">Total distributed: ${fmt(totalDistributed)} (${fmt(Math.abs(diff))} ${label} the ${fmt(prizePool)} prize pool)</span>`;
+    }
+  }
+}
+
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+['buyIn','toPool','addedFunds','entries','inc','payPct','firstPctTarget','minCashMult','minJumpSize','maxBand'].forEach(id => {
+  $(id).addEventListener('input', render);
+});
+$('curve').addEventListener('input', () => {
+  if (!isSyncingSlider) $('firstPctTarget').value = '';
+  render();
+});
+
+$('exportCsv').addEventListener('click', () => {
+  if (!window._lastResult) return;
+  const {res, prizePool, N, minCash, buyIn, toPool, addedFunds, entries} = window._lastResult;
+  let rows = [
+    ['Payout Sheet'],
+    ['Buy-in', buyIn],
+    ['To prize pool (per entry)', toPool],
+    ['Entries', entries],
+    ['Added funds (overlay)', addedFunds],
+    ['Prize Pool', prizePool],
+    ['% of Field Paid', $('payPct').value + '%'],
+    ['Places Paid', N],
+    ['Min Cash', minCash, `(${$('minCashMult').value}x buy-in)`],
+    ['Minimum jump between bands', $('minJumpSize').value],
+    ['Max places per band', $('maxBand').value],
+    [],
+    ['Place', 'Payout', '% of Pool', 'Jump']
+  ];
+  let place = 1;
+  res.tiers.forEach((size, i) => {
+    const pay = (window._workingPayout ? window._workingPayout[i] : res.tierPayout[i]);
+    const label = size === 1 ? `${place}` : `${place}-${place + size - 1}`;
+    const pct = ((pay / prizePool) * 100).toFixed(2) + '%';
+    const nextPay = window._workingPayout ? window._workingPayout[i + 1] : res.tierPayout[i + 1];
+    const jump = i < res.tiers.length - 1 ? (pay - nextPay) : '';
+    rows.push([label, pay, pct, jump]);
+    place += size;
+  });
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `payout-sheet-${entries}-entries.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+$('printSheet').addEventListener('click', () => window.print());
+
+render();
+</script>
+</body>
+</html>
