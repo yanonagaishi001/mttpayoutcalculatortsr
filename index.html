@@ -306,8 +306,8 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
 </head>
 <body>
 <div class="wrap">
-  <div class="eyebrow">State Championship &middot; Tournament Operations</div>
-  <h1>Payout Sheet Generator</h1>
+  <div class="eyebrow">Tournament Calculator Updated 07.08.2026</div>
+  <h1>Payout Sheet Calculator</h1>
   <p class="sub">Enter the buy-in and how much of it feeds the prize pool. Pays 12% of the field, floors the min-cash at 2&times; buy-in, and keeps every pay jump bigger than the one before it.</p>
 
   <div class="panel">
@@ -325,6 +325,10 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
         <div class="field-wrap"><span class="dollar">$</span><input type="number" id="addedFunds" value="0" min="0" step="1"></div>
       </div>
       <div>
+        <label for="casinoFee">Casino fee (deducted from pool)</label>
+        <div class="field-wrap"><span class="dollar">$</span><input type="number" id="casinoFee" value="0" min="0" step="1"></div>
+      </div>
+      <div>
         <label for="entries">Number of entries</label>
         <input type="number" id="entries" value="0" min="1" step="1">
       </div>
@@ -333,6 +337,7 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
         <select id="payPct">
           <option value="10">10%</option>
           <option value="12" selected>12%</option>
+          <option value="15">15%</option>
         </select>
       </div>
       <div>
@@ -544,11 +549,12 @@ function render() {
   const buyIn = parseFloat($('buyIn').value) || 0;
   const toPool = parseFloat($('toPool').value) || 0;
   const addedFunds = parseFloat($('addedFunds').value) || 0;
+  const casinoFee = parseFloat($('casinoFee').value) || 0;
   const entries = parseInt($('entries').value) || 0;
   const inc = parseFloat($('inc').value);
   const payPct = parseFloat($('payPct').value) / 100;
 
-  const prizePool = toPool * entries + addedFunds;
+  const prizePool = toPool * entries + addedFunds - casinoFee;
   const N = Math.max(1, Math.round(entries * payPct));
   const minCashMult = Math.max(2, parseFloat($('minCashMult').value) || 2);
   const minCash = minCashMult * buyIn;
@@ -574,11 +580,11 @@ function render() {
 
   $('statPool').textContent = fmt(prizePool);
   const breakdownEl = $('statPoolBreakdown');
-  if (addedFunds > 0) {
-    breakdownEl.textContent = `${fmt(toPool * entries)} from entries + ${fmt(addedFunds)} added`;
-  } else {
-    breakdownEl.textContent = '';
-  }
+  const parts = [];
+  if (addedFunds > 0 || casinoFee > 0) parts.push(`${fmt(toPool * entries)} from entries`);
+  if (addedFunds > 0) parts.push(`+ ${fmt(addedFunds)} added`);
+  if (casinoFee > 0) parts.push(`&minus; ${fmt(casinoFee)} casino fee`);
+  breakdownEl.innerHTML = parts.join(' ');
   $('statPlaces').textContent = N + (entries ? ` of ${entries}` : '');
   $('statMinLabel').textContent = `Min Cash (${minCashMult}\u00d7 buy-in)`;
   $('statMin').textContent = fmt(minCash);
@@ -614,6 +620,7 @@ function render() {
     <span>Prize Pool: ${fmt(prizePool)}</span>
     <span>Places Paid: ${N} (${$('payPct').value}%)</span>
     <span>Min Cash: ${fmt(minCash)}</span>
+    ${casinoFee > 0 ? `<span>Casino Fee: -${fmt(casinoFee)}</span>` : ''}
   `;
 
   const achievedPct = (res.tierPayout[0] / prizePool) * 100;
@@ -666,7 +673,7 @@ function render() {
     });
   });
 
-  window._lastResult = {res, prizePool, N, minCash, buyIn, toPool, addedFunds, entries};
+  window._lastResult = {res, prizePool, N, minCash, buyIn, toPool, addedFunds, casinoFee, entries};
 }
 
 function renderSkyline() {
@@ -733,7 +740,7 @@ function ordinal(n) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-['buyIn','toPool','addedFunds','entries','inc','payPct','firstPctTarget','minCashMult','minJumpSize','maxBand'].forEach(id => {
+['buyIn','toPool','addedFunds','casinoFee','entries','inc','payPct','firstPctTarget','minCashMult','minJumpSize','maxBand'].forEach(id => {
   $(id).addEventListener('input', render);
 });
 $('curve').addEventListener('input', () => {
@@ -743,13 +750,14 @@ $('curve').addEventListener('input', () => {
 
 $('exportCsv').addEventListener('click', () => {
   if (!window._lastResult) return;
-  const {res, prizePool, N, minCash, buyIn, toPool, addedFunds, entries} = window._lastResult;
+  const {res, prizePool, N, minCash, buyIn, toPool, addedFunds, casinoFee, entries} = window._lastResult;
   let rows = [
     ['Payout Sheet'],
     ['Buy-in', buyIn],
     ['To prize pool (per entry)', toPool],
     ['Entries', entries],
     ['Added funds (overlay)', addedFunds],
+    ['Casino fee (deducted)', casinoFee],
     ['Prize Pool', prizePool],
     ['% of Field Paid', $('payPct').value + '%'],
     ['Places Paid', N],
