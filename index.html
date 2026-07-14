@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Payout Sheet Generator</title>
+<title>Tournament Payout Calculator</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,800;1,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
 
@@ -273,11 +273,41 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
   line-height:1.6;
 }
 
+.floating-recon{
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  z-index: 500;
+  max-width: 260px;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  padding: 14px 16px;
+  box-shadow: 0 6px 20px rgba(21,18,28,0.18);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.floating-recon .k{
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--purple-deep);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.floating-recon.ok{ border-color: var(--purple-deep); }
+.floating-recon.off{ border-color: var(--red); }
+.floating-recon.off .k{ color: var(--red); }
+
+@media (max-width: 900px){
+  .floating-recon{ position: static; max-width: none; margin-bottom: 16px; box-shadow: none; }
+}
+
 .print-only{ display: none; }
 
 @media print {
   body{ padding: 0; background: white; }
-  .eyebrow, .sub, .panel:not(#skylinePanel), .stats, #warningBox, .actions, .footnote{ display: none !important; }
+  .eyebrow, .sub, .panel:not(#skylinePanel), .stats, #warningBox, .actions, .footnote, .floating-recon{ display: none !important; }
   .skyline, .skyline-caption{ display: none !important; }
   #skylinePanel{ border: none; padding: 0; }
   #skylinePanel::before{ display: none; }
@@ -306,12 +336,29 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
 </head>
 <body>
 <div class="wrap">
-  <div class="eyebrow">Tournament Calculator Updated 07.08.2026</div>
-  <h1>Payout Sheet Calculator</h1>
+  <div id="floatingRecon" class="floating-recon" style="display:none;"></div>
+
+  <div class="eyebrow">Talking Stick &middot; Tournament Operations</div>
+  <h1>Tournament Payout Calculator</h1>
   <p class="sub">Enter the buy-in and how much of it feeds the prize pool. Pays 12% of the field, floors the min-cash at 2&times; buy-in, and keeps every pay jump bigger than the one before it.</p>
 
   <div class="panel">
     <div class="grid">
+      <div class="slider-row" style="display:flex; align-items:flex-end; gap:14px;">
+        <div style="flex:1;">
+          <label for="tournamentPreset">Tournament</label>
+          <select id="tournamentPreset">
+            <option value="custom" selected>Custom / Manual Entry</option>
+            <option value="big_stack_eom_500">$500 Big Stack &amp; End of Month</option>
+            <option value="bounty_300">$300 Bounty</option>
+          <option value="nlh_800">$800 NLH</option>
+          <option value="nlh_400">$400 NLH</option>
+          <option value="nlh_200">$200 NLH</option>
+          <option value="nlh_300">$300 Super Stack</option>
+          </select>
+        </div>
+        <button type="button" id="resetSheet" style="margin-bottom:1px;">Reset</button>
+      </div>
       <div>
         <label for="buyIn">Total buy-in</label>
         <div class="field-wrap"><span class="dollar">$</span><input type="number" id="buyIn" value="0" min="0" step="1"></div>
@@ -325,7 +372,7 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
         <div class="field-wrap"><span class="dollar">$</span><input type="number" id="addedFunds" value="0" min="0" step="1"></div>
       </div>
       <div>
-        <label for="casinoFee">Casino fee (deducted from pool)</label>
+        <label for="casinoFee">Miscellaneous fee</label>
         <div class="field-wrap"><span class="dollar">$</span><input type="number" id="casinoFee" value="0" min="0" step="1"></div>
       </div>
       <div>
@@ -374,6 +421,12 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
         <label for="firstPctTarget">1st place target (%, optional)</label>
         <div class="field-wrap"><input type="number" id="firstPctTarget" placeholder="e.g. 25" min="0" max="90" step="0.1" style="padding-left:12px;"></div>
         <div class="slider-labels" id="firstPctHint" style="margin-top:6px;"></div>
+      </div>
+      <div class="slider-row" id="presetLockNote" style="display:none;">
+        <div class="warning" style="background:var(--purple-pale); border-color:var(--purple-line); color:var(--ink); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span id="presetLockText"></span>
+          <button type="button" id="presetOverrideBtn" style="white-space:nowrap;">Override for this sheet</button>
+        </div>
       </div>
     </div>
   </div>
@@ -517,9 +570,33 @@ function generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand}) 
   return {tiers, tierPayout, sum, error: null};
 }
 
+// Tournament presets - add new tournaments here.
+// tiers: entry-count brackets, each with a fixed 1st-place % target, so the
+// same tournament always pays the same way regardless of who's running the desk.
+const TOURNAMENT_PRESETS = {
+  big_stack_eom_500: { buyIn: 500, toPool: 420, payPct: 12,
+    tiers: [{max: 99, firstPct: 24}, {max: 249, firstPct: 21}, {max: Infinity, firstPct: 18}] },
+  bounty_300:    { buyIn: 300, toPool: 150, payPct: 12,
+    tiers: [{max: 99, firstPct: 25}, {max: 249, firstPct: 22}, {max: Infinity, firstPct: 19}] },
+  nlh_800:       { buyIn: 800, toPool: 720, payPct: 12,
+    tiers: [{max: 99, firstPct: 22}, {max: 249, firstPct: 19}, {max: Infinity, firstPct: 16}] },
+  nlh_400:       { buyIn: 400, toPool: 355, payPct: 12,
+    tiers: [{max: 99, firstPct: 22}, {max: 249, firstPct: 19}, {max: Infinity, firstPct: 16}] },
+  nlh_200:       { buyIn: 200, toPool: 150, payPct: 12,
+    tiers: [{max: 99, firstPct: 22}, {max: 249, firstPct: 19}, {max: Infinity, firstPct: 16}] },
+  nlh_300:       { buyIn: 300, toPool: 245, payPct: 12,
+    tiers: [{max: 99, firstPct: 29}, {max: 249, firstPct: 26}, {max: Infinity, firstPct: 23}] },
+};
+
+function tierFor(preset, entries) {
+  for (const t of preset.tiers) if (entries <= t.max) return t;
+  return preset.tiers[preset.tiers.length - 1];
+}
+
 const $ = id => document.getElementById(id);
 const fmt = n => '$' + Math.round(n).toLocaleString();
 let isSyncingSlider = false;
+let presetOverridden = false;
 
 function chipColor(rank) {
   if (rank === 1) return 'var(--purple-deep)';
@@ -583,7 +660,7 @@ function render() {
   const parts = [];
   if (addedFunds > 0 || casinoFee > 0) parts.push(`${fmt(toPool * entries)} from entries`);
   if (addedFunds > 0) parts.push(`+ ${fmt(addedFunds)} added`);
-  if (casinoFee > 0) parts.push(`&minus; ${fmt(casinoFee)} casino fee`);
+  if (casinoFee > 0) parts.push(`&minus; ${fmt(casinoFee)} misc. fee`);
   breakdownEl.innerHTML = parts.join(' ');
   $('statPlaces').textContent = N + (entries ? ` of ${entries}` : '');
   $('statMinLabel').textContent = `Min Cash (${minCashMult}\u00d7 buy-in)`;
@@ -597,6 +674,7 @@ function render() {
     skylinePanel.style.display = 'none';
     $('statFirst').textContent = '$0';
     $('firstPctHint').textContent = '';
+    $('floatingRecon').style.display = 'none';
     return;
   }
 
@@ -607,6 +685,7 @@ function render() {
     skylinePanel.style.display = 'none';
     $('statFirst').textContent = '—';
     $('firstPctHint').textContent = '';
+    $('floatingRecon').style.display = 'none';
     return;
   }
 
@@ -620,7 +699,7 @@ function render() {
     <span>Prize Pool: ${fmt(prizePool)}</span>
     <span>Places Paid: ${N} (${$('payPct').value}%)</span>
     <span>Min Cash: ${fmt(minCash)}</span>
-    ${casinoFee > 0 ? `<span>Casino Fee: -${fmt(casinoFee)}</span>` : ''}
+    ${casinoFee > 0 ? `<span>Misc. Fee: -${fmt(casinoFee)}</span>` : ''}
   `;
 
   const achievedPct = (res.tierPayout[0] / prizePool) * 100;
@@ -724,6 +803,7 @@ function refreshDerivedCells() {
   const diff = totalDistributed - prizePool;
   $('statFirst').textContent = fmt(payouts[0]);
   const reconEl = $('reconciliation');
+  const floatEl = $('floatingRecon');
   if (reconEl) {
     if (Math.abs(diff) < 1) {
       reconEl.innerHTML = `<span>Total distributed: ${fmt(totalDistributed)} &mdash; matches prize pool</span>`;
@@ -733,12 +813,101 @@ function refreshDerivedCells() {
       reconEl.innerHTML = `<span style="color:var(--red)">Total distributed: ${fmt(totalDistributed)} (${fmt(Math.abs(diff))} ${label} the ${fmt(prizePool)} prize pool)</span>`;
     }
   }
+  if (floatEl) {
+    floatEl.style.display = 'block';
+    if (Math.abs(diff) < 1) {
+      floatEl.className = 'floating-recon ok';
+      floatEl.innerHTML = `<div class="k">&#10003; Balanced</div>Total distributed: ${fmt(totalDistributed)}<br>Matches the ${fmt(prizePool)} prize pool.`;
+    } else {
+      const label = diff > 0 ? 'over' : 'short';
+      floatEl.className = 'floating-recon off';
+      floatEl.innerHTML = `<div class="k">&#9888; Doesn't add up</div>Total distributed: ${fmt(totalDistributed)}<br>${fmt(Math.abs(diff))} ${label} vs. the ${fmt(prizePool)} prize pool.`;
+    }
+  }
 }
 
 function ordinal(n) {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
+
+function setPresetControlsLocked(locked) {
+  $('curve').disabled = locked;
+  $('firstPctTarget').disabled = locked;
+  $('payPct').disabled = locked;
+}
+
+// Looks up the current preset (if any), picks the right entry-count tier,
+// and locks the curve/target/pay% controls to that tournament's standard
+// structure - so the same tournament always pays the same way.
+function applyPresetStructure() {
+  const presetKey = $('tournamentPreset').value;
+  const preset = TOURNAMENT_PRESETS[presetKey];
+  const noteEl = $('presetLockNote');
+  const textEl = $('presetLockText');
+
+  if (!preset || presetOverridden) {
+    noteEl.style.display = presetOverridden && preset ? 'block' : 'none';
+    setPresetControlsLocked(false);
+    if (presetOverridden && preset) {
+      textEl.textContent = `Overridden - adjusting this sheet manually won't affect the ${$('tournamentPreset').selectedOptions[0].textContent} standard structure.`;
+    }
+    return;
+  }
+
+  const entries = parseInt($('entries').value) || 0;
+  const tier = tierFor(preset, entries || 1);
+  const tierLabel = tier.max <= 99 ? 'Small field (\u2264 99 entries)'
+                    : tier.max <= 249 ? 'Medium field (100\u2013249 entries)'
+                    : 'Large field (250+ entries)';
+
+  $('payPct').value = String(preset.payPct);
+  $('firstPctTarget').value = tier.firstPct;
+  setPresetControlsLocked(true);
+
+  noteEl.style.display = 'block';
+  const tname = $('tournamentPreset').selectedOptions[0].textContent;
+  textEl.textContent = `Locked by the ${tname} standard structure \u2014 ${tierLabel}: ${tier.firstPct}% to 1st, ${preset.payPct}% of field paid.`;
+}
+
+$('tournamentPreset').addEventListener('change', (e) => {
+  const preset = TOURNAMENT_PRESETS[e.target.value];
+  presetOverridden = false;
+  if (preset) {
+    $('buyIn').value = preset.buyIn;
+    $('toPool').value = preset.toPool;
+  }
+  applyPresetStructure();
+  render();
+});
+['buyIn','toPool'].forEach(id => {
+  $(id).addEventListener('input', () => {
+    $('tournamentPreset').value = 'custom';
+    presetOverridden = false;
+    applyPresetStructure();
+  });
+});
+$('entries').addEventListener('input', applyPresetStructure);
+$('presetOverrideBtn').addEventListener('click', () => {
+  presetOverridden = true;
+  applyPresetStructure();
+  render();
+});
+
+$('resetSheet').addEventListener('click', () => {
+  ['buyIn','toPool','addedFunds','casinoFee','entries','minCashMult','minJumpSize','maxBand'].forEach(id => {
+    $(id).value = '0';
+  });
+  $('tournamentPreset').value = 'custom';
+  $('inc').value = '25';
+  $('payPct').value = '12';
+  $('firstPctTarget').value = '';
+  $('curve').value = '3.9';
+  presetOverridden = false;
+  setPresetControlsLocked(false);
+  $('presetLockNote').style.display = 'none';
+  render();
+});
 
 ['buyIn','toPool','addedFunds','casinoFee','entries','inc','payPct','firstPctTarget','minCashMult','minJumpSize','maxBand'].forEach(id => {
   $(id).addEventListener('input', render);
@@ -757,7 +926,7 @@ $('exportCsv').addEventListener('click', () => {
     ['To prize pool (per entry)', toPool],
     ['Entries', entries],
     ['Added funds (overlay)', addedFunds],
-    ['Casino fee (deducted)', casinoFee],
+    ['Miscellaneous fee', casinoFee],
     ['Prize Pool', prizePool],
     ['% of Field Paid', $('payPct').value + '%'],
     ['Places Paid', N],
