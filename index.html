@@ -402,7 +402,7 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
       </div>
       <div>
         <label for="minCashMult">Min cash (&times; buy-in)</label>
-        <input type="number" id="minCashMult" value="0" min="2" step="0.5">
+        <input type="number" id="minCashMult" value="0" min="1" step="0.5">
       </div>
       <div>
         <label for="minJumpSize">Minimum jump between bands</label>
@@ -576,7 +576,7 @@ function generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand}) 
 const TOURNAMENT_PRESETS = {
   big_stack_eom_500: { buyIn: 500, toPool: 420, payPct: 12,
     tiers: [{max: 99, firstPct: 24}, {max: 249, firstPct: 21}, {max: Infinity, firstPct: 18}] },
-  bounty_300:    { buyIn: 300, toPool: 150, payPct: 12,
+  bounty_300:    { buyIn: 300, toPool: 150, payPct: 12, minCashMult: 1,
     tiers: [{max: 99, firstPct: 25}, {max: 249, firstPct: 22}, {max: Infinity, firstPct: 19}] },
   nlh_800:       { buyIn: 800, toPool: 720, payPct: 12,
     tiers: [{max: 99, firstPct: 22}, {max: 249, firstPct: 19}, {max: Infinity, firstPct: 16}] },
@@ -633,7 +633,9 @@ function render() {
 
   const prizePool = toPool * entries + addedFunds - casinoFee;
   const N = Math.max(1, Math.round(entries * payPct));
-  const minCashMult = Math.max(2, parseFloat($('minCashMult').value) || 2);
+  const activePreset = TOURNAMENT_PRESETS[$('tournamentPreset').value];
+  const minCashFloor = (activePreset && activePreset.minCashMult) ? activePreset.minCashMult : 2;
+  const minCashMult = Math.max(minCashFloor, parseFloat($('minCashMult').value) || minCashFloor);
   const minCash = minCashMult * buyIn;
   const minJumpSize = Math.max(1, parseFloat($('minJumpSize').value) || 25);
   const maxBand = Math.max(1, parseInt($('maxBand').value) || 25);
@@ -835,6 +837,7 @@ function setPresetControlsLocked(locked) {
   $('curve').disabled = locked;
   $('firstPctTarget').disabled = locked;
   $('payPct').disabled = locked;
+  $('minCashMult').disabled = locked;
 }
 
 // Looks up the current preset (if any), picks the right entry-count tier,
@@ -863,11 +866,15 @@ function applyPresetStructure() {
 
   $('payPct').value = String(preset.payPct);
   $('firstPctTarget').value = tier.firstPct;
+  $('minCashMult').value = preset.minCashMult || 2;
   setPresetControlsLocked(true);
 
   noteEl.style.display = 'block';
   const tname = $('tournamentPreset').selectedOptions[0].textContent;
-  textEl.textContent = `Locked by the ${tname} standard structure \u2014 ${tierLabel}: ${tier.firstPct}% to 1st, ${preset.payPct}% of field paid.`;
+  const minCashNote = preset.minCashMult && preset.minCashMult !== 2
+    ? ` Min cash is ${preset.minCashMult}\u00d7 buy-in for this tournament (not the standard 2\u00d7).`
+    : '';
+  textEl.textContent = `Locked by the ${tname} standard structure \u2014 ${tierLabel}: ${tier.firstPct}% to 1st, ${preset.payPct}% of field paid.${minCashNote}`;
 }
 
 $('tournamentPreset').addEventListener('change', (e) => {
