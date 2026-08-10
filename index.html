@@ -342,9 +342,14 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
   <h1>Tournament Payout Calculator</h1>
   <p class="sub">Enter the buy-in and how much of it feeds the prize pool. Pays 12% of the field, floors the min-cash at 2&times; buy-in, and keeps every pay jump bigger than the one before it.</p>
 
+  <div class="slider-row" style="display:flex; gap:10px; margin-bottom:14px;">
+    <button type="button" id="modeCash" class="primary" style="flex:1;">Cash Payout</button>
+    <button type="button" id="modeSatellite" style="flex:1;">Satellite</button>
+  </div>
+
   <div class="panel">
     <div class="grid">
-      <div class="slider-row" style="display:flex; align-items:flex-end; gap:14px;">
+      <div class="slider-row cash-only" id="tournamentRow" style="display:flex; align-items:flex-end; gap:14px;">
         <div style="flex:1;">
           <label for="tournamentPreset">Tournament</label>
           <select id="tournamentPreset">
@@ -362,6 +367,14 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
       <div>
         <label for="buyIn">Total buy-in</label>
         <div class="field-wrap"><span class="dollar">$</span><input type="number" id="buyIn" value="0" min="0" step="1"></div>
+      </div>
+      <div id="satelliteTicketField" style="display:none;">
+        <label for="ticketValue">Satellite is for (ticket value)</label>
+        <div class="field-wrap"><span class="dollar">$</span><input type="number" id="ticketValue" value="0" min="0" step="1"></div>
+      </div>
+      <div id="satellitePctField" style="display:none;">
+        <label for="satellitePct">% of field gets a ticket</label>
+        <div class="field-wrap"><input type="number" id="satellitePct" value="10" min="1" max="90" step="1" style="padding-left:12px;"></div>
       </div>
       <div>
         <label for="toPool">Goes to prize pool</label>
@@ -400,29 +413,29 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
           <option value="200">$200</option>
         </select>
       </div>
-      <div>
+      <div class="cash-only">
         <label for="minCashMult">Min cash (&times; buy-in)</label>
         <input type="number" id="minCashMult" value="0" min="1" step="0.5">
       </div>
-      <div>
+      <div class="cash-only">
         <label for="minJumpSize">Minimum jump between bands</label>
         <div class="field-wrap"><span class="dollar">$</span><input type="number" id="minJumpSize" value="0" min="1" step="1"></div>
       </div>
-      <div>
+      <div class="cash-only">
         <label for="maxBand">Max places per band</label>
         <input type="number" id="maxBand" value="0" min="1" step="1">
       </div>
-      <div class="slider-row">
+      <div class="slider-row cash-only">
         <label for="curve">Payout curve shape</label>
         <input type="range" id="curve" min="1.8" max="15.1" step="0.7" value="3.9">
         <div class="slider-labels"><span>Flatter</span><span>Standard</span><span>Top-heavy</span></div>
       </div>
-      <div>
+      <div class="cash-only">
         <label for="firstPctTarget">1st place target (%, optional)</label>
         <div class="field-wrap"><input type="number" id="firstPctTarget" placeholder="e.g. 25" min="0" max="90" step="0.1" style="padding-left:12px;"></div>
         <div class="slider-labels" id="firstPctHint" style="margin-top:6px;"></div>
       </div>
-      <div class="slider-row" id="presetLockNote" style="display:none;">
+      <div class="slider-row cash-only" id="presetLockNote" style="display:none;">
         <div class="warning" style="background:var(--purple-pale); border-color:var(--purple-line); color:var(--ink); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
           <span id="presetLockText"></span>
           <button type="button" id="presetOverrideBtn" style="white-space:nowrap;">Override for this sheet</button>
@@ -435,7 +448,7 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
     <div class="stat"><div class="k">Prize Pool</div><div class="v mono" id="statPool">$0</div><div class="footnote" id="statPoolBreakdown" style="margin-top:6px;"></div></div>
     <div class="stat"><div class="k" id="statPlacesLabel">Places Paid (12%)</div><div class="v mono" id="statPlaces">0</div></div>
     <div class="stat"><div class="k" id="statMinLabel">Min Cash (2&times; buy-in)</div><div class="v mono" id="statMin">$0</div></div>
-    <div class="stat"><div class="k">1st Place</div><div class="v mono" id="statFirst">$0</div></div>
+    <div class="stat"><div class="k" id="statFirstLabel">1st Place</div><div class="v mono" id="statFirst">$0</div></div>
   </div>
 
   <div id="warningBox"></div>
@@ -451,7 +464,7 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
 
     <table>
       <thead>
-        <tr><th>Place</th><th>Payout</th><th>% of Pool</th><th>Jump</th></tr>
+        <tr><th>Place</th><th>Payout</th><th id="thCol3">% of Pool</th><th id="thCol4">Jump</th></tr>
       </thead>
       <tbody id="tableBody"></tbody>
     </table>
@@ -597,6 +610,7 @@ const $ = id => document.getElementById(id);
 const fmt = n => '$' + Math.round(n).toLocaleString();
 let isSyncingSlider = false;
 let presetOverridden = false;
+let payoutMode = 'cash';
 
 function chipColor(rank) {
   if (rank === 1) return 'var(--purple-deep)';
@@ -623,6 +637,8 @@ function solveCurveForTarget(targetPct, prizePool, minCash, N, inc, lo, hi, minJ
 }
 
 function render() {
+  if (payoutMode === 'satellite') { renderSatellite(); return; }
+
   const buyIn = parseFloat($('buyIn').value) || 0;
   const toPool = parseFloat($('toPool').value) || 0;
   const addedFunds = parseFloat($('addedFunds').value) || 0;
@@ -833,6 +849,147 @@ function ordinal(n) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
+// Satellites work completely differently from cash payouts: every winner
+// gets the same flat ticket value (no curve, no min-cash rule, no increasing
+// jumps) except possibly the very last winner, who gets whatever's left
+// over as cash instead of a full ticket.
+function renderSatellite() {
+  const buyIn = parseFloat($('buyIn').value) || 0;
+  const toPool = parseFloat($('toPool').value) || 0;
+  const addedFunds = parseFloat($('addedFunds').value) || 0;
+  const casinoFee = parseFloat($('casinoFee').value) || 0;
+  const entries = parseInt($('entries').value) || 0;
+  const ticketValue = parseFloat($('ticketValue').value) || 0;
+  const satellitePct = parseFloat($('satellitePct').value) || 10;
+
+  const warningBox = $('warningBox');
+  const skylinePanel = $('skylinePanel');
+
+  $('statPool').textContent = fmt(toPool * entries + addedFunds - casinoFee);
+  $('statPoolBreakdown').textContent = '';
+  $('statPlacesLabel').textContent = 'Places Paid';
+  $('statMinLabel').textContent = 'Ticket Value';
+  $('statFirstLabel').textContent = 'Tickets Awarded';
+
+  if (!buyIn || !toPool || !entries || !ticketValue) {
+    warningBox.innerHTML = '';
+    skylinePanel.style.display = 'none';
+    $('statPlaces').textContent = '0';
+    $('statMin').textContent = '$0';
+    $('statFirst').textContent = '0';
+    $('floatingRecon').style.display = 'none';
+    return;
+  }
+
+  const prizePool = toPool * entries + addedFunds - casinoFee;
+  let numTickets = Math.floor((satellitePct / 100) * entries);
+  let moneyForTickets = numTickets * ticketValue;
+  while (numTickets > 0 && moneyForTickets > prizePool) {
+    numTickets--;
+    moneyForTickets = numTickets * ticketValue;
+  }
+  const leftover = Math.round((prizePool - moneyForTickets) * 100) / 100;
+  const hasCashPlace = leftover > 0.5 && numTickets < entries;
+  const totalPlacesPaid = numTickets + (hasCashPlace ? 1 : 0);
+
+  if (numTickets === 0) {
+    warningBox.innerHTML = `<div class="warning"><strong>Can't award any tickets:</strong> the prize pool ($${prizePool.toLocaleString()}) can't cover even one $${ticketValue.toLocaleString()} ticket. Lower the ticket value or increase entries/buy-in.</div>`;
+    skylinePanel.style.display = 'none';
+    $('statPlaces').textContent = '0';
+    $('statMin').textContent = fmt(ticketValue);
+    $('statFirst').textContent = '0';
+    $('floatingRecon').style.display = 'none';
+    return;
+  }
+
+  warningBox.innerHTML = '';
+  skylinePanel.style.display = 'block';
+  $('statPlaces').textContent = `${totalPlacesPaid} of ${entries}`;
+  $('statMin').textContent = fmt(ticketValue);
+  $('statFirst').textContent = String(numTickets);
+
+  $('printMeta').innerHTML = `
+    <span>Buy-in: ${fmt(buyIn)}</span>
+    <span>Entries: ${entries.toLocaleString()}</span>
+    <span>Prize Pool: ${fmt(prizePool)}</span>
+    <span>Ticket Value: ${fmt(ticketValue)}</span>
+    <span>Tickets Awarded: ${numTickets}</span>
+  `;
+
+  // skyline: every ticket bar is the same height, cash place is shorter (proportional)
+  const skyline = $('skyline');
+  skyline.innerHTML = '';
+  for (let i = 0; i < numTickets; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.height = '130px';
+    bar.style.background = chipColor(i + 1);
+    bar.title = fmt(ticketValue) + ' ticket';
+    skyline.appendChild(bar);
+  }
+  if (hasCashPlace) {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.height = Math.max(4, (leftover / ticketValue) * 130) + 'px';
+    bar.style.background = 'var(--silver)';
+    bar.title = fmt(leftover) + ' cash';
+    skyline.appendChild(bar);
+  }
+
+  // table
+  const tbody = $('tableBody');
+  tbody.innerHTML = '';
+  for (let i = 0; i < numTickets; i++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="place-tag"><span class="chip" style="background:${chipColor(i + 1)}"></span>${ordinal(i + 1)}</span></td>
+      <td class="payout-amt">${fmt(ticketValue)}</td>
+      <td>Ticket</td>
+      <td><span class="jump dash">&mdash;</span></td>
+    `;
+    tbody.appendChild(tr);
+  }
+  if (hasCashPlace) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="place-tag"><span class="chip" style="background:var(--silver)"></span>${ordinal(numTickets + 1)}</span></td>
+      <td class="payout-amt">${fmt(leftover)}</td>
+      <td>Cash (leftover)</td>
+      <td><span class="jump dash">&mdash;</span></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  $('reconciliation').innerHTML = `<span>${numTickets} ticket${numTickets === 1 ? '' : 's'} at ${fmt(ticketValue)}${hasCashPlace ? ` + ${fmt(leftover)} cash to ${ordinal(numTickets + 1)}` : ''} &mdash; uses all ${fmt(prizePool)} of the pool.</span>`;
+
+  const floatEl = $('floatingRecon');
+  floatEl.style.display = 'block';
+  floatEl.className = 'floating-recon ok';
+  floatEl.innerHTML = `<div class="k">&#10003; Satellite</div>${numTickets} ticket${numTickets === 1 ? '' : 's'} @ ${fmt(ticketValue)}${hasCashPlace ? `<br>+ ${fmt(leftover)} cash (${ordinal(numTickets + 1)})` : ''}`;
+
+  window._lastResult = null; // satellite results aren't hand-edited like cash sheets
+}
+
+function updateModeUI() {
+  const isSat = payoutMode === 'satellite';
+  document.querySelectorAll('.cash-only').forEach(el => { el.style.display = isSat ? 'none' : ''; });
+  $('satelliteTicketField').style.display = isSat ? 'block' : 'none';
+  $('satellitePctField').style.display = isSat ? 'block' : 'none';
+  $('modeCash').className = isSat ? '' : 'primary';
+  $('modeSatellite').className = isSat ? 'primary' : '';
+  $('thCol3').textContent = isSat ? 'Type' : '% of Pool';
+  $('thCol4').textContent = isSat ? '' : 'Jump';
+  if (isSat) {
+    $('tournamentPreset').value = 'custom';
+    presetOverridden = false;
+    $('presetLockNote').style.display = 'none';
+  }
+}
+$('modeCash').addEventListener('click', () => { payoutMode = 'cash'; updateModeUI(); render(); });
+$('modeSatellite').addEventListener('click', () => { payoutMode = 'satellite'; updateModeUI(); render(); });
+['ticketValue','satellitePct'].forEach(id => {
+  $(id).addEventListener('input', render);
+});
 function setPresetControlsLocked(locked) {
   $('curve').disabled = locked;
   $('firstPctTarget').disabled = locked;
@@ -902,7 +1059,7 @@ $('presetOverrideBtn').addEventListener('click', () => {
 });
 
 $('resetSheet').addEventListener('click', () => {
-  ['buyIn','toPool','addedFunds','casinoFee','entries','minCashMult','minJumpSize','maxBand'].forEach(id => {
+  ['buyIn','toPool','addedFunds','casinoFee','entries','minCashMult','minJumpSize','maxBand','ticketValue'].forEach(id => {
     $(id).value = '0';
   });
   $('tournamentPreset').value = 'custom';
@@ -910,9 +1067,12 @@ $('resetSheet').addEventListener('click', () => {
   $('payPct').value = '12';
   $('firstPctTarget').value = '';
   $('curve').value = '3.9';
+  $('satellitePct').value = '10';
   presetOverridden = false;
   setPresetControlsLocked(false);
   $('presetLockNote').style.display = 'none';
+  payoutMode = 'cash';
+  updateModeUI();
   render();
 });
 
@@ -925,6 +1085,39 @@ $('curve').addEventListener('input', () => {
 });
 
 $('exportCsv').addEventListener('click', () => {
+  if (payoutMode === 'satellite') {
+    const buyIn = parseFloat($('buyIn').value) || 0;
+    const toPool = parseFloat($('toPool').value) || 0;
+    const entries = parseInt($('entries').value) || 0;
+    const addedFunds = parseFloat($('addedFunds').value) || 0;
+    const casinoFee = parseFloat($('casinoFee').value) || 0;
+    const ticketValue = parseFloat($('ticketValue').value) || 0;
+    const satellitePct = parseFloat($('satellitePct').value) || 10;
+    const prizePool = toPool * entries + addedFunds - casinoFee;
+    let numTickets = Math.floor((satellitePct / 100) * entries);
+    let moneyForTickets = numTickets * ticketValue;
+    while (numTickets > 0 && moneyForTickets > prizePool) { numTickets--; moneyForTickets = numTickets * ticketValue; }
+    const leftover = Math.round((prizePool - moneyForTickets) * 100) / 100;
+    const hasCashPlace = leftover > 0.5 && numTickets < entries;
+    let rows = [
+      ['Satellite Payout Sheet'],
+      ['Buy-in', buyIn], ['To prize pool (per entry)', toPool], ['Entries', entries],
+      ['Added funds (overlay)', addedFunds], ['Miscellaneous fee', casinoFee],
+      ['Prize Pool', prizePool], ['Ticket Value', ticketValue], ['% of field gets a ticket', satellitePct],
+      [], ['Place', 'Payout', 'Type'],
+    ];
+    for (let i = 0; i < numTickets; i++) rows.push([i+1, ticketValue, 'Ticket']);
+    if (hasCashPlace) rows.push([numTickets+1, leftover, 'Cash (leftover)']);
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `satellite-payout-${entries}-entries.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
   if (!window._lastResult) return;
   const {res, prizePool, N, minCash, buyIn, toPool, addedFunds, casinoFee, entries} = window._lastResult;
   let rows = [
