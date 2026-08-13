@@ -370,6 +370,7 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
           <option value="nlh_400">$400 NLH</option>
           <option value="nlh_200">$200 NLH</option>
           <option value="nlh_300">$300 Super Stack</option>
+          <option value="az_state_1100">Arizona State Championship</option>
           </select>
         </div>
         <button type="button" id="resetSheet" style="margin-bottom:1px;">Reset</button>
@@ -598,17 +599,19 @@ function generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand}) 
 // same tournament always pays the same way regardless of who's running the desk.
 const TOURNAMENT_PRESETS = {
   big_stack_eom_500: { buyIn: 500, toPool: 420, payPct: 12,
-    tiers: [{max: Infinity, firstPct: 20}] },
+    tiers: [{max: 99, firstPct: 24}, {max: 249, firstPct: 21}, {max: Infinity, firstPct: 18}] },
   bounty_300:    { buyIn: 300, toPool: 150, payPct: 12, minCashMult: 1,
     tiers: [{max: 99, firstPct: 25}, {max: 249, firstPct: 22}, {max: Infinity, firstPct: 19}] },
   nlh_800:       { buyIn: 800, toPool: 720, payPct: 12,
-    tiers: [{max: Infinity, firstPct: 20}] },
+    tiers: [{max: 99, firstPct: 22}, {max: 249, firstPct: 19}, {max: Infinity, firstPct: 16}] },
   nlh_400:       { buyIn: 400, toPool: 355, payPct: 12,
-    tiers: [{max: Infinity, firstPct: 20}] },
+    tiers: [{max: 99, firstPct: 22}, {max: 249, firstPct: 19}, {max: Infinity, firstPct: 16}] },
   nlh_200:       { buyIn: 200, toPool: 150, payPct: 12,
-    tiers: [{max: Infinity, firstPct: 20}] },
+    tiers: [{max: 99, firstPct: 22}, {max: 249, firstPct: 19}, {max: Infinity, firstPct: 16}] },
   nlh_300:       { buyIn: 300, toPool: 245, payPct: 12,
-    tiers: [{max: Infinity, firstPct: 20}] },
+    tiers: [{max: 99, firstPct: 29}, {max: 249, firstPct: 26}, {max: Infinity, firstPct: 23}] },
+  az_state_1100: { buyIn: 1100, toPool: 990, payPct: 12,
+    tiers: [{max: 99, firstPct: 22}, {max: 249, firstPct: 19}, {max: Infinity, firstPct: 16}] },
 };
 
 function tierFor(preset, entries) {
