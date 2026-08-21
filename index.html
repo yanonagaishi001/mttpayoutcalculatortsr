@@ -232,6 +232,24 @@ tbody tr:hover{ background: var(--purple-pale); }
   display:inline-block; flex-shrink:0;
 }
 .payout-amt{ font-weight:700; font-size:15px; color: var(--ink); }
+.band-edit{
+  width: 54px;
+  padding: 3px 4px;
+  margin: 0 2px;
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--purple-deep);
+  background: var(--white);
+  border: 1px solid rgba(21,18,28,0.3);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color .15s;
+}
+.band-edit:hover{ border-color: var(--purple-deep); }
+.band-edit:focus{ border-color: var(--purple-deep); background: var(--purple-pale); }
+.band-edit::-webkit-outer-spin-button, .band-edit::-webkit-inner-spin-button{ opacity: 0.5; }
 .payout-edit{
   width: 90px;
   text-align: right;
@@ -334,6 +352,7 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
   thead th{ border-bottom: 1.5px solid var(--ink); }
   tbody tr:hover{ background: none; }
   .payout-edit{ border: none !important; background: none !important; box-shadow: none !important; padding: 0; }
+  .band-edit{ border: none !important; background: none !important; color: var(--ink) !important; width: auto !important; padding: 0; }
   #reconciliation{ display: none; }
 }
 
@@ -487,7 +506,7 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
       <button class="primary" id="exportCsv">Export CSV</button>
       <button id="printSheet">Print Sheet</button>
     </div>
-    <p class="footnote">1st through 9th always get individual payouts (or all paid places, if fewer than 9 cash). Beyond 9th, places are grouped into tiers the way most rooms post them (e.g. "10th&ndash;12th"). Every jump &mdash; individual or tier-to-tier &mdash; is strictly larger than the jump below it, and the last paid place always pays exactly the min-cash multiplier &times; the buy-in (2&times; minimum, adjustable above) unless the pool can't support it, in which case you'll see a warning above. Raising the multiplier shifts money from the top places into the lower bands.</p>
+    <p class="footnote">1st through 10th always get individual payouts (or all paid places, if fewer than 10 cash). Beyond 10th, places are grouped into tiers the way most rooms post them (e.g. "11th&ndash;13th"). Every jump &mdash; individual or tier-to-tier &mdash; is strictly larger than the jump below it, and the last paid place always pays exactly the min-cash multiplier &times; the buy-in (2&times; minimum, adjustable above) unless the pool can't support it, in which case you'll see a warning above. Raising the multiplier shifts money from the top places into the lower bands.</p>
   </div>
 </div>
 
@@ -495,7 +514,7 @@ button.primary:hover{ background: var(--purple-deep); border-color: var(--purple
 function buildTiers(N, maxBand) {
   const tiers = [];
   let remaining = N;
-  const individualCount = Math.min(9, N);
+  const individualCount = Math.min(10, N);
   for (let i = 0; i < individualCount; i++) { tiers.push(1); remaining -= 1; }
   let size = 3;
   while (remaining > 0) {
@@ -507,7 +526,7 @@ function buildTiers(N, maxBand) {
   return tiers;
 }
 
-function generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand}) {
+function generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand, entries}) {
   if (N <= 0) return {error: "No places to pay at this field size."};
   const tiers = buildTiers(N, maxBand || 25);
   const T = tiers.length;
@@ -580,6 +599,8 @@ function generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand}) 
   }
   sum = tierPayout.reduce((a, v, i) => a + v * tiers[i], 0);
 
+  sum = tierPayout.reduce((a, v, i) => a + v * tiers[i], 0);
+
   let valid = true;
   for (let i = 0; i < T - 1; i++) if (tierPayout[i] <= tierPayout[i + 1]) valid = false;
   for (let i = 0; i < T - 2; i++) {
@@ -632,18 +653,18 @@ function chipColor(rank) {
   return 'var(--silver)';
 }
 
-function achievedFirstPct(p, prizePool, minCash, N, inc, minJumpSize, maxBand) {
-  const res = generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand});
+function achievedFirstPct(p, prizePool, minCash, N, inc, minJumpSize, maxBand, entries) {
+  const res = generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand, entries});
   if (res.error) return null;
   return (res.tierPayout[0] / prizePool) * 100;
 }
 
 // Binary search for the curve setting (within the slider's own range) that
 // makes 1st place land closest to the requested percentage of the pool.
-function solveCurveForTarget(targetPct, prizePool, minCash, N, inc, lo, hi, minJumpSize, maxBand) {
+function solveCurveForTarget(targetPct, prizePool, minCash, N, inc, lo, hi, minJumpSize, maxBand, entries) {
   for (let iter = 0; iter < 40; iter++) {
     const mid = (lo + hi) / 2;
-    const val = achievedFirstPct(mid, prizePool, minCash, N, inc, minJumpSize, maxBand);
+    const val = achievedFirstPct(mid, prizePool, minCash, N, inc, minJumpSize, maxBand, entries);
     if (val === null || val < targetPct) lo = mid; else hi = mid;
   }
   return (lo + hi) / 2;
@@ -676,7 +697,7 @@ function render() {
     const target = parseFloat(targetRaw);
     const sliderMin = parseFloat($('curve').min);
     const sliderMax = parseFloat($('curve').max);
-    p = solveCurveForTarget(target, prizePool, minCash, N, inc, sliderMin, sliderMax, minJumpSize, maxBand);
+    p = solveCurveForTarget(target, prizePool, minCash, N, inc, sliderMin, sliderMax, minJumpSize, maxBand, entries);
     isSyncingSlider = true;
     $('curve').value = p.toFixed(2);
     isSyncingSlider = false;
@@ -709,7 +730,7 @@ function render() {
     return;
   }
 
-  const res = generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand});
+  const res = generatePayouts({prizePool, minCash, N, p, inc, minJumpSize, maxBand, entries});
 
   if (res.error) {
     warningBox.innerHTML = `<div class="warning"><strong>Can't build a valid sheet:</strong> ${res.error}</div>`;
@@ -754,15 +775,36 @@ function render() {
   renderSkyline();
 
   // table
+  renderTable();
+
+  window._lastResult = {res, prizePool, N, minCash, buyIn, toPool, addedFunds, casinoFee, entries};
+}
+
+function renderTable() {
   const tbody = $('tableBody');
+  const tiers = window._workingTiers;
+  const payouts = window._workingPayout;
+  const entries = parseInt($('entries').value) || 0;
+  const N = tiers.reduce((a, b) => a + b, 0);
   tbody.innerHTML = '';
   let place = 1;
-  res.tiers.forEach((size, i) => {
-    const pay = res.tierPayout[i];
-    const label = size === 1 ? ordinal(place) : `${ordinal(place)}&ndash;${ordinal(place + size - 1)}`;
+  tiers.forEach((size, i) => {
+    const pay = payouts[i];
+    const start = place;
+    const end = place + size - 1;
+    const isLast = i === tiers.length - 1;
+    const isFirst = i === 0;
+    // last band can grow up to total entries; every other band is capped so
+    // it can't eat into the band two-below it (must leave that one >= 1 place)
+    const maxVal = isLast ? Math.max(start, entries || end) : (N - (tiers.length - 1 - i));
+
+    const startCell = isFirst
+      ? ordinal(start)
+      : `<input type="number" class="band-edit" data-band-start="${i}" value="${start}" min="1" max="${end}">`;
+    const placeCell = `<span class="place-tag"><span class="chip" style="background:${chipColor(start)}"></span>${startCell}${size > 1 || !isFirst ? '&ndash;' : ' through '}<input type="number" class="band-edit" data-band="${i}" value="${end}" min="${start}" max="${maxVal}"></span>`;
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="place-tag"><span class="chip" style="background:${chipColor(place)}"></span>${label}</span></td>
+      <td>${placeCell}</td>
       <td class="payout-amt"><input type="number" class="payout-edit" data-tier="${i}" value="${pay}" step="1"></td>
       <td id="pctcell-${i}"></td>
       <td id="jumpcell-${i}"></td>
@@ -783,8 +825,53 @@ function render() {
     });
   });
 
-  window._lastResult = {res, prizePool, N, minCash, buyIn, toPool, addedFunds, casinoFee, entries};
+  tbody.querySelectorAll('.band-edit').forEach(input => {
+    input.addEventListener('change', (e) => {
+      if (e.target.dataset.band !== undefined) {
+        const idx = parseInt(e.target.dataset.band);
+        const newEnd = parseInt(e.target.value);
+        handleBandBoundaryEdit(idx, newEnd);
+      } else if (e.target.dataset.bandStart !== undefined) {
+        // editing a band's start place is the same boundary as the
+        // previous band's end place, just approached from the other side
+        const idx = parseInt(e.target.dataset.bandStart);
+        const newStart = parseInt(e.target.value);
+        handleBandBoundaryEdit(idx - 1, newStart - 1);
+      }
+    });
+  });
 }
+
+// Lets a floor person drag a band's ending place up or down - the very next
+// band gives up (or absorbs) exactly the places that changed, so every place
+// still belongs to exactly one band and the total always stays right.
+function handleBandBoundaryEdit(bandIndex, newEnd) {
+  const tiers = window._workingTiers;
+  const entries = parseInt($('entries').value) || 0;
+  const isLast = bandIndex === tiers.length - 1;
+  if (isNaN(newEnd)) { renderTable(); return; }
+
+  let start = 1;
+  for (let i = 0; i < bandIndex; i++) start += tiers[i];
+  const newSize = newEnd - start + 1;
+
+  if (newSize < 1) { renderTable(); return; }
+
+  if (isLast) {
+    // no band below to borrow from - this directly changes total places paid
+    if (entries && newEnd > entries) { renderTable(); return; }
+    tiers[bandIndex] = newSize;
+  } else {
+    const oldSize = tiers[bandIndex];
+    const delta = newSize - oldSize;
+    const nextNewSize = tiers[bandIndex + 1] - delta;
+    if (nextNewSize < 1) { renderTable(); return; } // would empty the next band
+    tiers[bandIndex] = newSize;
+    tiers[bandIndex + 1] = nextNewSize;
+  }
+  renderTable();
+}
+
 
 function renderSkyline() {
   const skyline = $('skyline');
@@ -809,6 +896,10 @@ function refreshDerivedCells() {
   const tiers = window._workingTiers;
   const prizePool = window._workingPool;
   if (!payouts) return;
+
+  const totalPlaces = tiers.reduce((a, b) => a + b, 0);
+  const entries = parseInt($('entries').value) || 0;
+  $('statPlaces').textContent = totalPlaces + (entries ? ` of ${entries}` : '');
 
   let totalDistributed = 0;
   for (let i = 0; i < tiers.length; i++) totalDistributed += payouts[i] * tiers[i];
